@@ -185,8 +185,12 @@ public class CardRenderer {
 				g.drawString(line.substring(line.lastIndexOf(",") + 1), x, y += g.getFontMetrics().getHeight());
 			} else if (line.length() >= 85) {
 				int newLineIndex = line.indexOf(" ", 75);
-				g.drawString(line.substring(0, newLineIndex + 1), x, y += g.getFontMetrics().getHeight());
-				g.drawString(line.substring(newLineIndex), x, y += g.getFontMetrics().getHeight());
+				if (newLineIndex != -1) {
+					g.drawString(line.substring(0, newLineIndex + 1), x, y += g.getFontMetrics().getHeight());
+					g.drawString(line.substring(newLineIndex), x, y += g.getFontMetrics().getHeight());
+				} else {
+					g.drawString(line, x, y += g.getFontMetrics().getHeight());
+				}
 			} else {
 				g.drawString(line, x, y += g.getFontMetrics().getHeight());
 			}

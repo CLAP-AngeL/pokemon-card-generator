@@ -95,7 +95,7 @@ public class RestCommunicator {
 			}
 
 			try {
-				Thread.sleep(20000);
+				Thread.sleep(20000  + (times + 1) * 1000L);
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 			}
@@ -129,7 +129,7 @@ public class RestCommunicator {
 			}
 
 			try {
-				Thread.sleep(20000);
+				Thread.sleep(20000 + (times + 1) * 1000L);
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 			}
