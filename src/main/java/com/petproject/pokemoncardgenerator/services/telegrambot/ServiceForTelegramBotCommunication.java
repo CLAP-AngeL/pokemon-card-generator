@@ -192,8 +192,9 @@ public class ServiceForTelegramBotCommunication {
 	public void startCommandReceived(long chatId) {
 		SendMessage message = new SendMessage();
 		message.setChatId(chatId);
-		message.setText("Welcome to the Pokemon Card Generator!\n"
-				+ " Feel yourself free and let's create some new cards! Choose help, if you don't know how to use this tool.");
+		message.setText("Welcome to the Pokemon Card Generator!"
+				+ "\nFeel yourself free and let's create some new cards!"
+				+ "\nChoose help, if you don't know how to use this tool.");
 		sendMessage(message);
 	}
 

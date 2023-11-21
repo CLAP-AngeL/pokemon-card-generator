@@ -20,6 +20,8 @@ dependencies {
     implementation 'com.taobao.arthas:fastjson:1.2.80-fix'
     implementation 'org.telegram:telegrambots:6.7.0'
     implementation 'org.slf4j:slf4j-api:2.0.7'
+    implementation 'org.springframework.retry:spring-retry:2.0.2'
+    implementation 'org.springframework:spring-aspects:6.0.11'
 }
 
 tasks.named('test') {

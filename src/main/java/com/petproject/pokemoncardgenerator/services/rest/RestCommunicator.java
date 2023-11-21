@@ -1,11 +1,5 @@
 package com.petproject.pokemoncardgenerator.services.rest;
 
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-
-import javax.imageio.ImageIO;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,9 +10,14 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
+
+import com.petproject.pokemoncardgenerator.services.rest.error.ModelIsLoadingException;
 
 /**
  * Service for making API requests to Hugging Face Generative Models via API Inferences
@@ -31,8 +30,6 @@ public class RestCommunicator {
 
 	@Value("${huggingface.api.tocken}")
 	private String apiToken;
-	@Value("${generativeai:false}")
-	private Boolean isAIAllowed;
 
 	private final RestTemplate restTemplate;
 
@@ -40,39 +37,8 @@ public class RestCommunicator {
 		this.restTemplate = restTemplateBuilder.build();
 	}
 
-	public String executeTextToTextRestCall(String model, String prompt) {
-		ResponseEntity<String> response = executeTextToTextRestCall(prompt, model, 0);
-
-		if (response != null && response.getBody() != null) {
-			String result = response.getBody();
-			String str = "\\n\\n";
-			int indexOfAnswer = result.indexOf(str);
-			result = result.substring(indexOfAnswer);
-			result = result.replace(str, "");
-			result = result.replace("\"}]", "");
-
-			return result;
-		}
-
-		return null;
-	}
-
-	public BufferedImage executeTextToImageRestCall(String model, String prompt) {
-		ResponseEntity<byte[]> response = executeTextToImageRestCall(prompt, model, 0);
-
-		if (response != null && response.getBody() != null) {
-			byte[] result = response.getBody();
-			try {
-				return ImageIO.read(new ByteArrayInputStream(result));
-			} catch (IOException e) {
-				LOGGER.error("Error during transforming into BufferedImage image from the response", e);
-			}
-		}
-
-		return null;
-	}
-
-	private ResponseEntity<String> executeTextToTextRestCall(String prompt, String model, int times) {
+	@Retryable(retryFor= ModelIsLoadingException.class, maxAttempts = 4, backoff = @Backoff(delay = 20000, maxDelay = 160000, multiplier = 2))
+	public ResponseEntity<String> executeTextToTextRestCall(String prompt, String model) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setBearerAuth(apiToken);
 		headers.setContentType(MediaType.APPLICATION_JSON);
@@ -81,33 +47,29 @@ public class RestCommunicator {
 				MAX_AMOUNT_TOKENS);
 		HttpEntity<String> httpEntity = new HttpEntity<>(requestBody, headers);
 
-		ResponseEntity<String> response;
+		ResponseEntity<String> response = null;
 		try {
 			response = restTemplate.exchange("https://api-inference.huggingface.co/models/".concat(model),
 					HttpMethod.POST, httpEntity, String.class);
 
 		} catch (RestClientResponseException exception) {
-			LOGGER.error("Text generation rest exception", exception);
-			LOGGER.info("Making repeat request for {} time(s)...", times + 1);
-
-			if (times >= 5) {
-				return null;
+			if (exception.getStatusCode().is5xxServerError()){
+				LOGGER.error("Text generation rest exception", exception);
+				throw new ModelIsLoadingException(exception.getResponseBodyAsString());
 			}
-
-			try {
-				Thread.sleep(20000  + (times + 1) * 1000L);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-
-			times++;
-			response = executeTextToTextRestCall(prompt, model, times);
 		}
 
 		return response;
 	}
 
-	private ResponseEntity<byte[]> executeTextToImageRestCall(String prompt, String model, int times) {
+	@Recover
+	public ResponseEntity<String> executeTextToTextRestCallRecover(ModelIsLoadingException exception, String prompt, String model) {
+		LOGGER.error("An error occurred during rest request for the text generation. Proceed without requested text.");
+		return null;
+	}
+
+	@Retryable(retryFor= ModelIsLoadingException.class, maxAttempts = 4, backoff = @Backoff(delay = 500, maxDelay = 160000, multiplier = 2))
+	public ResponseEntity<byte[]> executeTextToImageRestCall(String prompt, String model) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setBearerAuth(apiToken);
 		headers.setContentType(MediaType.APPLICATION_JSON);
@@ -115,33 +77,24 @@ public class RestCommunicator {
 		String requestBody = String.format("{\"inputs\":\"%s\"}", prompt);
 		HttpEntity<String> httpEntity = new HttpEntity<>(requestBody, headers);
 
-		ResponseEntity<byte[]> response;
+		ResponseEntity<byte[]> response = null;
 		restTemplate.getMessageConverters().add(new ByteArrayHttpMessageConverter());
 		try {
 			response = restTemplate.exchange("https://api-inference.huggingface.co/models/".concat(model),
 					HttpMethod.POST, httpEntity, byte[].class);
 		} catch (RestClientResponseException exception) {
-			LOGGER.error("Image generation rest exception", exception);
-			LOGGER.info("Making repeat request for {} time(s)...", times + 1);
-
-			if (times >= 5) {
-				return null;
+			if (exception.getStatusCode().is5xxServerError()){
+				LOGGER.error("Image generation rest exception", exception);
+				throw new ModelIsLoadingException(exception.getResponseBodyAsString());
 			}
-
-			try {
-				Thread.sleep(20000 + (times + 1) * 1000L);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-
-			times++;
-			response = executeTextToImageRestCall(prompt, model, times);
 		}
 
 		return response;
 	}
 
-	public boolean isApiEnabled() {
-		return apiToken != null && isAIAllowed;
+	@Recover
+	public ResponseEntity<byte[]> executeTextToImageRestCall(ModelIsLoadingException exception, String prompt, String model) {
+		LOGGER.error("An error occurred during rest request for the image generation. Proceed without requested image.");
+		return null;
 	}
 }

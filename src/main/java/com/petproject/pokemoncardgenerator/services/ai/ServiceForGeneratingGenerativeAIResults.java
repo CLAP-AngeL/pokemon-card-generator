@@ -12,16 +12,18 @@ import org.springframework.util.StringUtils;
 import com.petproject.pokemoncardgenerator.Models;
 import com.petproject.pokemoncardgenerator.model.Pokemon;
 import com.petproject.pokemoncardgenerator.model.details.Ability;
-import com.petproject.pokemoncardgenerator.services.rest.RestCommunicator;
+import com.petproject.pokemoncardgenerator.services.rest.RestCommunicatorWrapper;
 
 @Service
 public class ServiceForGeneratingGenerativeAIResults {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ServiceForGeneratingGenerativeAIResults.class);
+	private static final String ERROR_DURING_API_REQUEST = "Error occurred during API request for generating pokemon card";
+	private static final String DEFAULT_NAME = "Unnamed";
 
-	private final RestCommunicator restCommunicator;
+	private final RestCommunicatorWrapper restCommunicator;
 
-	public ServiceForGeneratingGenerativeAIResults(RestCommunicator restCommunicator) {
+	public ServiceForGeneratingGenerativeAIResults(RestCommunicatorWrapper restCommunicator) {
 		this.restCommunicator = restCommunicator;
 	}
 
@@ -36,17 +38,17 @@ public class ServiceForGeneratingGenerativeAIResults {
 		ServiceForGeneratingGenerativeAIResults.LOGGER.info(
 				"Making a request to generate ability name with following prompt: {}", prompt);
 
-		String abilityName = restCommunicator.executeTextToTextRestCall(Models.TEXT_GENERATION_MODEL, prompt);
+		String abilityName = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, prompt);
 		if (abilityName != null) {
 			if (abilityName.length() > 30) {
 				ServiceForGeneratingGenerativeAIResults.LOGGER.info(
 						"Ability name is too long. Making request again...");
 
-				abilityName = restCommunicator.executeTextToTextRestCall(Models.TEXT_GENERATION_MODEL, prompt);
+				abilityName = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, prompt);
 				if (abilityName == null || abilityName.length() > 30) {
 					ServiceForGeneratingGenerativeAIResults.LOGGER.error(
-							"Error occurred during API request for generating pokemon card");
-					return "Unnamed";
+							ERROR_DURING_API_REQUEST);
+					return DEFAULT_NAME;
 				}
 			}
 
@@ -61,7 +63,7 @@ public class ServiceForGeneratingGenerativeAIResults {
 	}
 
 	public BufferedImage generatePokemonImage(String imagePrompt) {
-		BufferedImage pokemonImage = restCommunicator.executeTextToImageRestCall(Models.IMAGE_GENERATION_MODEL,
+		BufferedImage pokemonImage = restCommunicator.executeImageGenerationRestCall(Models.IMAGE_GENERATION_MODEL,
 				imagePrompt);
 
 		if (pokemonImage != null) {
@@ -103,7 +105,7 @@ public class ServiceForGeneratingGenerativeAIResults {
 		ServiceForGeneratingGenerativeAIResults.LOGGER.info(
 				"Making a request to generate pokemon description with following prompt: {}", sb);
 
-		String desc = restCommunicator.executeTextToTextRestCall(Models.TEXT_GENERATION_MODEL, sb.toString());
+		String desc = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, sb.toString());
 		if (desc != null) {
 			ServiceForGeneratingGenerativeAIResults.LOGGER.info("Successfully generated description: {}", desc);
 		} else {
@@ -125,7 +127,7 @@ public class ServiceForGeneratingGenerativeAIResults {
 				String.format(" (without using the word %s or %s) in one word without punctuation signs:", SUBJECT_TYPE,
 						pokemon.getElement().getElementName()));
 
-		return getProperName(pokemon, prompt);
+		return getProperName(prompt);
 	}
 
 	/***
@@ -135,27 +137,27 @@ public class ServiceForGeneratingGenerativeAIResults {
 	 * Currently following conditions are coupled to the model it was used with, mistralai/Mistral-7B-Instruct-v0.1
 	 * For other models the prompts could look differently and the results as well, thus, it is better to play along firstly with the model.
 	 */
-	private String getProperName(Pokemon pokemon, String prompt) {
+	private String getProperName(String prompt) {
 		ServiceForGeneratingGenerativeAIResults.LOGGER.info(
 				"Making a request to generate pokemon name with following prompt: {}", prompt);
 
-		String name = restCommunicator.executeTextToTextRestCall(Models.TEXT_GENERATION_MODEL, prompt);
+		String name = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, prompt);
 		if (name != null) {
 			ServiceForGeneratingGenerativeAIResults.LOGGER.info("Successfully returned name: {}", name);
 		} else {
 			ServiceForGeneratingGenerativeAIResults.LOGGER.error(
-					"Error occurred during API request for generating pokemon card");
-			return "Unnamed";
+					ERROR_DURING_API_REQUEST);
+			return DEFAULT_NAME;
 		}
 
 		if (name.length() > 18) {
 			ServiceForGeneratingGenerativeAIResults.LOGGER.info("Name is too long. Making request again...");
 
-			name = restCommunicator.executeTextToTextRestCall(Models.TEXT_GENERATION_MODEL, prompt);
+			name = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, prompt);
 			if (name == null) {
 				ServiceForGeneratingGenerativeAIResults.LOGGER.error(
-						"Error occurred during API request for generating pokemon card");
-				return "Unnamed";
+						ERROR_DURING_API_REQUEST);
+				return DEFAULT_NAME;
 			}
 		}
 
