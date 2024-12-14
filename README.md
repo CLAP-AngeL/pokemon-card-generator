@@ -1,6 +1,6 @@
 # Pokémon Card Generator
 
-## Ovewview
+## Overview
 The Pokémon Card Generator is a Java Spring Boot Application integrated with a Telegram Bot, designed to unleash the creative power of Generative AI models. This project allows you to connect your own bot, select an element, and specify the type of creature you desire. In just a few moments, you'll have your very own custom Pokemon cards!
 ![alt text](readmeimages/cards.png "Cards")
 
