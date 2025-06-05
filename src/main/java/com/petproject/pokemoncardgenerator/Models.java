@@ -13,6 +13,6 @@ public class Models {
 	// leonardo AI style goofyai/Leonardo_Ai_Style_Illustration
 	// anime style Linaqruf/animagine-xl
 	// stable difussion XL 1 stabilityai/stable-diffusion-xl-base-1.0
-	public static final String IMAGE_GENERATION_MODEL = "levtech/siennatest5";
+	public static final String IMAGE_GENERATION_MODEL = "stabilityai/stable-diffusion-xl-base-1.0";
 
 }

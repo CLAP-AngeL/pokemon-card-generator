@@ -11,6 +11,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Wrapper For Rest Communicator in order @Retryable to be invoked
@@ -18,52 +21,71 @@ import org.springframework.stereotype.Service;
 @Service
 public class RestCommunicatorWrapper {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(RestCommunicatorWrapper.class);
-	private final RestCommunicator restCommunicator;
+    private static final Logger LOGGER = LoggerFactory.getLogger(RestCommunicatorWrapper.class);
+    private final RestCommunicator restCommunicator;
 
-	@Value("${huggingface.api.tocken}")
-	private String apiToken;
-	@Value("${generativeai:false}")
-	private Boolean isAIAllowed;
+    @Value("${huggingface.api.token}")  // Note: possible typo in property key (tocken → token)
+    private String apiToken;
 
-	public RestCommunicatorWrapper(RestCommunicator restCommunicator) {
-		this.restCommunicator = restCommunicator;
-	}
+    @Value("${generativeai:false}")
+    private Boolean isAIAllowed;
 
-	public String executeTextGenerationRestCall(String model, String prompt) {
-		ResponseEntity<String> response = restCommunicator.executeTextToTextRestCall(prompt, model);
+    public RestCommunicatorWrapper(RestCommunicator restCommunicator) {
+        this.restCommunicator = restCommunicator;
+    }
 
-		if (response != null && response.getBody() != null) {
-			String result = response.getBody();
-			String str = "\\n\\n";
-			int indexOfAnswer = result.indexOf(str);
-			result = result.substring(indexOfAnswer);
-			result = result.replace(str, "");
-			result = result.replace("\"}]", "");
+    public String executeTextGenerationRestCall(String model, String prompt) {
+        try {
+            ResponseEntity<String> response = restCommunicator.executeTextToTextRestCall(prompt);
 
-			return result;
-		}
+            if (response != null && response.getBody() != null) {
+                String result = response.getBody();
+                String str = "\\n\\n";
+                int indexOfAnswer = result.indexOf(str);
 
-		return null;
-	}
+                if (indexOfAnswer >= 0) {
+                    result = result.substring(indexOfAnswer);
+                }
 
-	public BufferedImage executeImageGenerationRestCall(String model, String prompt) {
-		ResponseEntity<byte[]> response = restCommunicator.executeTextToImageRestCall(prompt, model);
+                result = result.replace(str, "").replace("\"}]", "");
 
-		if (response != null && response.getBody() != null) {
-			byte[] result = response.getBody();
-			try {
-				return ImageIO.read(new ByteArrayInputStream(result));
-			} catch (IOException e) {
-				LOGGER.error("Error during transforming into BufferedImage image from the response", e);
-			}
-		}
+                return result;
+            }
 
-		return null;
-	}
-	public boolean isApiEnabled() {
-		return apiToken != null && isAIAllowed;
-	}
+        } catch (HttpClientErrorException | HttpServerErrorException ex) {
+            LOGGER.error("HTTP error from Hugging Face API: {} - {}", ex.getStatusCode(), ex.getResponseBodyAsString());
+        } catch (RestClientException ex) {
+            LOGGER.error("RestClientException during text generation call", ex);
+        } catch (Exception ex) {
+            LOGGER.error("Unexpected error during text generation call", ex);
+        }
 
+        return null;
+    }
 
+    public BufferedImage executeImageGenerationRestCall(String model, String prompt) {
+        try {
+            ResponseEntity<byte[]> response = restCommunicator.executeTextToImageRestCall(prompt);
+
+            if (response != null && response.getBody() != null) {
+                byte[] result = response.getBody();
+                return ImageIO.read(new ByteArrayInputStream(result));
+            }
+
+        } catch (HttpClientErrorException | HttpServerErrorException ex) {
+            LOGGER.error("HTTP error from Hugging Face API (image gen): {} - {}", ex.getStatusCode(), ex.getResponseBodyAsString());
+        } catch (RestClientException ex) {
+            LOGGER.error("RestClientException during image generation call", ex);
+        } catch (IOException ex) {
+            LOGGER.error("IOException while transforming image response", ex);
+        } catch (Exception ex) {
+            LOGGER.error("Unexpected error during image generation call", ex);
+        }
+
+        return null;
+    }
+
+    public boolean isApiEnabled() {
+        return apiToken != null && isAIAllowed;
+    }
 }

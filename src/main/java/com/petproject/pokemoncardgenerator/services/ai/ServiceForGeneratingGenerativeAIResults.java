@@ -35,31 +35,26 @@ public class ServiceForGeneratingGenerativeAIResults {
 				ability.getElement().getElementName(), ability.getCost(), mixed, extraPower);
 		prompt = prompt.concat(". Without using the words from parameters, in one word without punctuation signs:");
 
-		ServiceForGeneratingGenerativeAIResults.LOGGER.info(
-				"Making a request to generate ability name with following prompt: {}", prompt);
+		LOGGER.info("Making a request to generate ability name with following prompt: {}", prompt);
 
-		String abilityName = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, prompt);
-		if (abilityName != null) {
-			if (abilityName.length() > 30) {
-				ServiceForGeneratingGenerativeAIResults.LOGGER.info(
-						"Ability name is too long. Making request again...");
-
+		try {
+			String abilityName = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, prompt);
+			if (abilityName != null && abilityName.length() > 30) {
+				LOGGER.info("Ability name is too long. Making request again...");
 				abilityName = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, prompt);
-				if (abilityName == null || abilityName.length() > 30) {
-					ServiceForGeneratingGenerativeAIResults.LOGGER.error(
-							ERROR_DURING_API_REQUEST);
-					return DEFAULT_NAME;
-				}
 			}
 
-			ServiceForGeneratingGenerativeAIResults.LOGGER.info("Successfully generated ability name: {}", abilityName);
-		} else {
-			ServiceForGeneratingGenerativeAIResults.LOGGER.error(
-					"Error occurred during API request for generating ability name");
-			abilityName = "Unnamed Ability";
-		}
+			if (abilityName == null || abilityName.length() > 30) {
+				LOGGER.error("Failed to generate a valid ability name after retrying");
+				return DEFAULT_NAME;
+			}
 
-		return abilityName;
+			LOGGER.info("Successfully generated ability name: {}", abilityName);
+			return abilityName;
+		} catch (Exception e) {
+			LOGGER.error("Exception occurred during ability name generation", e);
+			return DEFAULT_NAME;
+		}
 	}
 
 	public BufferedImage generatePokemonImage(String imagePrompt) {
@@ -107,10 +102,9 @@ public class ServiceForGeneratingGenerativeAIResults {
 
 		String desc = restCommunicator.executeTextGenerationRestCall(Models.TEXT_GENERATION_MODEL, sb.toString());
 		if (desc != null) {
-			ServiceForGeneratingGenerativeAIResults.LOGGER.info("Successfully generated description: {}", desc);
+			LOGGER.info("Successfully generated description: {}", desc);
 		} else {
-			ServiceForGeneratingGenerativeAIResults.LOGGER.error(
-					"Error occurred during API request for generating pokemon description");
+			LOGGER.error("Error occurred during API request for generating pokemon description. Prompt: {}", sb);
 			desc = "";
 		}
 
