@@ -1,14 +1,15 @@
-# Use slim OpenJDK 17 as base
-FROM openjdk:17-jdk-slim
+# Use a multi-stage build to keep image size small and clean
+FROM gradle:8.4-jdk17 AS builder
+WORKDIR /app
+COPY . .
+RUN gradle bootJar --no-daemon
 
-# Create app directory
+# Slim runtime image
+FROM openjdk:17-jdk-slim
 WORKDIR /app
 
-# Copy everything into the container
-COPY . .
-
-# Build the project (optional if pre-built locally)
-RUN ./gradlew build
+# Copy only the built jar from the builder stage
+COPY --from=builder /app/build/libs/PokemonCardGenerator-0.0.1-SNAPSHOT.jar app.jar
 
 # Run the jar
-CMD ["java", "-jar", "build/libs/PokemonCardGenerator-0.0.1-SNAPSHOT.jar"]
+CMD ["java", "-jar", "app.jar"]
