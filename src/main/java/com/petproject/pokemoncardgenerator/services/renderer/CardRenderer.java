@@ -3,6 +3,7 @@ package com.petproject.pokemoncardgenerator.services.renderer;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -11,7 +12,6 @@ import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.util.ResourceUtils;
 
 import com.petproject.pokemoncardgenerator.Constants;
 import com.petproject.pokemoncardgenerator.model.Pokemon;
@@ -28,7 +28,7 @@ public class CardRenderer {
 		BufferedImage cardTemplateImage = getCardTemplateImage(pokemon);
 
 		if (cardTemplateImage == null) {
-			CardRenderer.LOGGER.info("Card template is absent, cannot proceed further");
+			LOGGER.info("Card template is absent, cannot proceed further");
 			return null;
 		}
 
@@ -42,158 +42,44 @@ public class CardRenderer {
 		Font boldFont;
 		Font regularFont;
 		Font symbolFont;
-		try {
-			boldFont = Font.createFont(Font.TRUETYPE_FONT,
-					ResourceUtils.getFile("classpath:generator/font/Cabin-Bold.ttf"));
-			regularFont = Font.createFont(Font.TRUETYPE_FONT,
-					ResourceUtils.getFile("classpath:generator/font/Cabin_Condensed-Regular.ttf"));
-			symbolFont = Font.createFont(Font.TRUETYPE_FONT,
-					ResourceUtils.getFile("classpath:generator/font/NotoSansSymbols2-Regular.ttf"));
+		try (InputStream boldStream = getClass().getResourceAsStream("/generator/font/Cabin-Bold.ttf");
+		     InputStream regularStream = getClass().getResourceAsStream("/generator/font/Cabin_Condensed-Regular.ttf");
+		     InputStream symbolStream = getClass().getResourceAsStream("/generator/font/NotoSansSymbols2-Regular.ttf")) {
+
+			boldFont = Font.createFont(Font.TRUETYPE_FONT, boldStream);
+			regularFont = Font.createFont(Font.TRUETYPE_FONT, regularStream);
+			symbolFont = Font.createFont(Font.TRUETYPE_FONT, symbolStream);
+
 		} catch (FontFormatException | IOException e) {
-			CardRenderer.LOGGER.error("Error during creating font, using default fonts", e);
+			LOGGER.error("Error during creating font, using default fonts", e);
 			boldFont = new Font(Constants.DEFAULT_FONT, Font.BOLD, 14);
 			regularFont = new Font(Constants.DEFAULT_FONT, Font.BOLD, 14);
 			symbolFont = new Font(Constants.DEFAULT_FONT, Font.BOLD, 14);
 		}
 
 		drawPokemonImageInsideTemplateCard(pokemonImage, cardTemplateImage, g);
-
 		drawPokemonName(pokemon, g, boldFont);
-
 		drawHP(pokemon, canvas, g, regularFont);
-
 		drawAbilities(pokemon, canvas, g, boldFont, regularFont);
-
 		drawWeaknessAndResist(pokemon, canvas, g);
-
 		drawRarity(pokemon, canvas, g, regularFont, symbolFont);
-
-		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
 		g.dispose();
 		LOGGER.info("Finished image generation.");
 		return canvas;
 	}
 
-	private void drawRarity(Pokemon pokemon, BufferedImage canvas, Graphics2D g, Font regularFont, Font symbolFont) {
-		int rarityPositionX = 58;
-		int rarityPositionY = 580;
-		g.setFont(regularFont.deriveFont(Font.ITALIC, 12f));
-		g.setColor(Color.BLACK);
-		drawString(g, pokemon.getDescription(), rarityPositionX, rarityPositionY);
-
-		int raritySymbolPositionX = canvas.getWidth() - 74;
-		int raritySymbolPositionY = 634;
-
-		String[] raritySymbols = { "\u2B24", "\u25C6", "\u2605" };
-		float[] raritySymbolSizes = { 12f, 12f, 14f };
-
-		g.setFont(symbolFont.deriveFont(raritySymbolSizes[pokemon.getRarity().ordinal()]));
-
-		g.drawString(raritySymbols[pokemon.getRarity().ordinal()], raritySymbolPositionX, raritySymbolPositionY);
-	}
-
-	private void drawAbilities(Pokemon pokemon, BufferedImage canvas, Graphics2D g, Font boldFont, Font regularFont) {
-		int abilityXPosition = Math.floorDiv((canvas.getWidth() - Constants.ABILITY_WIDTH), 2);
-		int abilityPositionCenterY = 450;
-		int abilityOriginY = 0;
-
-		if (pokemon.getAbilities().size() == 1) {
-			abilityOriginY = abilityPositionCenterY - (Math.floorDiv(Constants.ABILITY_HEIGHT, 2));
-		} else if (pokemon.getAbilities().size() == 2) {
-			abilityOriginY =
-					abilityPositionCenterY - (Constants.ABILITY_HEIGHT + Math.floorDiv(Constants.ABILITY_COST_GAP, 2));
-		}
-
-		//Draw the abilities in reverse order so that the first ability is at the bottom.
-		List<Ability> reversedAbilities = IntStream.range(0, pokemon.getAbilities().size()) //
-				.map(i -> pokemon.getAbilities().size() - 1 - i).mapToObj(pokemon.getAbilities()::get).toList();
-
-		int i = 0;
-		for (Ability ability : reversedAbilities) {
-
-			BufferedImage abilityImage = drawAbility(ability, boldFont, regularFont);
-			int abilityY = abilityOriginY + (i * (Constants.ABILITY_HEIGHT + Constants.ABILITY_COST_GAP));
-			g.drawImage(abilityImage, abilityXPosition, abilityY, null);
-
-			i++;
-			abilityPositionCenterY += Constants.ABILITY_HEIGHT;
-		}
-
-		// line between abilities
-		if (pokemon.getAbilities().size() > 1) {
-			int lineY = abilityOriginY + Constants.ABILITY_HEIGHT;
-			int lineExtensionGap = 36;
-			g.setColor(Color.BLACK);
-			g.drawLine(lineExtensionGap, lineY, canvas.getWidth() - lineExtensionGap, lineY);
-		}
-	}
-
-	private void drawHP(Pokemon pokemon, BufferedImage canvas, Graphics2D g, Font regularFont) {
-		int hpXPosition = canvas.getWidth() - 156;
-		int hpYPosition = 64;
-
-		g.setFont(regularFont.deriveFont(28f));
-		g.setColor(Color.RED);
-		g.drawString(pokemon.getHp() + " HP", hpXPosition, hpYPosition);
-	}
-
-	private void drawPokemonName(Pokemon pokemon, Graphics2D g, Font boldFont) {
-		int nameTextPositionX = 48;
-		int nameTextPositionY = 64;
-
-		g.setFont(boldFont.deriveFont(28f));
-		g.setColor(Color.BLACK);
-		g.drawString(pokemon.getName(), nameTextPositionX, nameTextPositionY);
-	}
-
-	private void drawPokemonImageInsideTemplateCard(BufferedImage pokemonImage, BufferedImage cardTemplateImage,
-			Graphics2D g) {
-		double rescaleFactor = Constants.IDEAL_CARD_WIDTH / pokemonImage.getWidth();
-
-		int resizedPokemonImageWidth = (int) (pokemonImage.getWidth() * rescaleFactor);
-		int resizedPokemonImageHeight = (int) (pokemonImage.getHeight() * rescaleFactor);
-
-		pokemonImage = resize(pokemonImage, resizedPokemonImageWidth, resizedPokemonImageHeight);
-
-		double cardCenterX = (double) cardTemplateImage.getWidth() / 2;
-		double cardCenterY = 210;
-		double pokemonImageX = cardCenterX - (double) pokemonImage.getWidth() / 2;
-		double pokemonImageY = cardCenterY - (double) pokemonImage.getHeight() / 2;
-
-		g.drawImage(pokemonImage, (int) pokemonImageX, (int) pokemonImageY, null);
-		g.drawImage(cardTemplateImage, 0, 0, null);
-	}
-
 	private BufferedImage getCardTemplateImage(Pokemon pokemon) {
 		String cardTemplateName = pokemon.getElement().getElementName().toLowerCase() + "_card.png";
-		BufferedImage cardTemplateImage = null;
-		try {
-			cardTemplateImage = ImageIO.read(
-					ResourceUtils.getFile("classpath:generator/cards/templates/" + cardTemplateName));
-		} catch (IOException e) {
-			CardRenderer.LOGGER.error("Error during reading pokemon template image", e);
-		}
-		return cardTemplateImage;
-	}
-
-	void drawString(Graphics2D g, String text, int x, int y) {
-		for (String line : text.split("\\.")) {
-			if (line.length() > 85 && line.contains(",")) {
-				g.drawString(line.substring(0, line.lastIndexOf(",") + 1), x, y += g.getFontMetrics().getHeight());
-				g.drawString(line.substring(line.lastIndexOf(",") + 1), x, y += g.getFontMetrics().getHeight());
-			} else if (line.length() >= 85) {
-				int newLineIndex = line.indexOf(" ", 75);
-				if (newLineIndex != -1) {
-					g.drawString(line.substring(0, newLineIndex + 1), x, y += g.getFontMetrics().getHeight());
-					g.drawString(line.substring(newLineIndex), x, y += g.getFontMetrics().getHeight());
-				} else {
-					g.drawString(line, x, y += g.getFontMetrics().getHeight());
-				}
-			} else {
-				g.drawString(line, x, y += g.getFontMetrics().getHeight());
+		try (InputStream is = getClass().getResourceAsStream("/generator/cards/templates/" + cardTemplateName)) {
+			if (is == null) {
+				LOGGER.error("Template not found in resources: " + cardTemplateName);
+				return null;
 			}
+			return ImageIO.read(is);
+		} catch (IOException e) {
+			LOGGER.error("Error during reading pokemon template image", e);
+			return null;
 		}
 	}
 
@@ -216,48 +102,22 @@ public class CardRenderer {
 
 	private void drawElement(Graphics2D g, PokemonElement element, int positionX) {
 		BufferedImage elementImage = null;
-		try {
-			elementImage = ImageIO.read(ResourceUtils.getFile(
-					"classpath:generator/elements/" + element.getElementName().toLowerCase() + "_element.png"));
+		String path = "/generator/elements/" + element.getElementName().toLowerCase() + "_element.png";
+		try (InputStream is = getClass().getResourceAsStream(path)) {
+			if (is != null) {
+				elementImage = ImageIO.read(is);
+			}
 		} catch (IOException e) {
-			CardRenderer.LOGGER.error("Error during getting ");
+			LOGGER.error("Error loading element image: " + path, e);
 		}
 
-		if (elementImage == null) {
-			CardRenderer.LOGGER.info("Skipping element, because cannot process its image");
-		} else {
+		if (elementImage != null) {
 			elementImage = resize(elementImage, Constants.STATUS_SIZE, Constants.STATUS_SIZE);
 			g.drawImage(elementImage, positionX - Math.floorDiv(Constants.STATUS_SIZE, 2),
 					Constants.STATUS_Y_POSITION - Math.floorDiv(Constants.STATUS_SIZE, 2), null);
+		} else {
+			LOGGER.warn("Element image not found or failed to load: " + path);
 		}
-	}
-
-	private BufferedImage drawAbility(Ability ability, Font boldFont, Font regularFont) {
-		BufferedImage canvas = new BufferedImage(Constants.ABILITY_WIDTH, Constants.ABILITY_HEIGHT,
-				BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = canvas.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-		BufferedImage costImage = drawElementCost(ability.costsAsElements());
-		g.drawImage(costImage, 0, 0, null);
-
-		int nameTextPositionX = Math.floorDiv(Constants.ABILITY_WIDTH, 2) - 70;
-		int nameTextPositionY = Math.floorDiv(Constants.ABILITY_HEIGHT, 2) + 10;
-
-		g.setFont(boldFont.deriveFont(24f));
-		g.setColor(Color.BLACK);
-		g.drawString(ability.getName(), nameTextPositionX, nameTextPositionY);
-
-		int powerTextPositionX = Constants.ABILITY_WIDTH - 45;
-		int powerTextPositionY = Math.floorDiv(Constants.ABILITY_HEIGHT, 2) + 12;
-
-		g.setFont(regularFont.deriveFont(32f));
-		g.setColor(Color.BLACK);
-		g.drawString(String.valueOf(ability.getPower()), powerTextPositionX, powerTextPositionY);
-
-		g.dispose();
-
-		return canvas;
 	}
 
 	private BufferedImage drawElementCost(List<String> elements) {
@@ -267,12 +127,6 @@ public class CardRenderer {
 
 		int cost = elements.size();
 		int[][] positions = new int[cost][2];
-
-		/*
-		If there are two icons, they are centered and 20 pixels apart.
-     	If there are three icons, they are in a triangle.
-    	If there are four icons, they are in a square.
-		 */
 
 		int centerX = Math.floorDiv(Constants.ABILITY_COST_WIDTH, 2);
 		int centerY = Math.floorDiv(Constants.ABILITY_HEIGHT, 2);
@@ -307,24 +161,25 @@ public class CardRenderer {
 			positions[3][1] = yOffsetDown;
 		}
 
-		int i = 0;
-		for (String element : elements) {
+		for (int i = 0; i < cost; i++) {
+			String element = elements.get(i);
 			BufferedImage elementImage = null;
-			try {
-				elementImage = ImageIO.read(ResourceUtils.getFile(
-						"classpath:generator/elements/" + element.toLowerCase() + "_element.png"));
+			String path = "/generator/elements/" + element.toLowerCase() + "_element.png";
+			try (InputStream is = getClass().getResourceAsStream(path)) {
+				if (is != null) {
+					elementImage = ImageIO.read(is);
+				}
 			} catch (IOException e) {
-				CardRenderer.LOGGER.error("Error during getting element image", e);
+				LOGGER.error("Error loading element cost image: " + path, e);
 			}
 
-			if (elementImage == null) {
-				CardRenderer.LOGGER.info("Skipping element, because cannot process its image");
-			} else {
+			if (elementImage != null) {
 				elementImage = resize(elementImage, Constants.ELEMENT_SIZE, Constants.ELEMENT_SIZE);
 				g.drawImage(elementImage, positions[i][0] - Math.floorDiv(Constants.ELEMENT_SIZE, 2),
 						positions[i][1] - Math.floorDiv(Constants.ELEMENT_SIZE, 2), null);
+			} else {
+				LOGGER.warn("Missing cost icon: " + path);
 			}
-			i++;
 		}
 
 		g.dispose();
@@ -334,11 +189,9 @@ public class CardRenderer {
 	public BufferedImage resize(BufferedImage img, int newW, int newH) {
 		Image tmp = img.getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
 		BufferedImage buf = new BufferedImage(newW, newH, BufferedImage.TYPE_INT_ARGB);
-
 		Graphics2D g2d = buf.createGraphics();
 		g2d.drawImage(tmp, 0, 0, null);
 		g2d.dispose();
-
 		return buf;
 	}
 }
