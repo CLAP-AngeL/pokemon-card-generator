@@ -55,13 +55,18 @@ public class CardRenderer {
     }
 
     private Font loadFont(String path, int style) {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
-            return Font.createFont(Font.TRUETYPE_FONT, is).deriveFont(style, 14f);
-        } catch (Exception e) {
-            LOGGER.error("Error loading font: " + path, e);
-            return new Font("SansSerif", style, 14);
-        }
-    }
+		try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
+			if (is == null) {
+				LOGGER.error("❌ Font resource NOT found at: {}", path);
+				return new Font("SansSerif", style, 14);
+			}
+			LOGGER.info("✅ Font resource loaded successfully: {}", path);
+			return Font.createFont(Font.TRUETYPE_FONT, is).deriveFont(style, 14f);
+		} catch (Exception e) {
+			LOGGER.error("⚠️ Failed to load or parse font: {}", path, e);
+			return new Font("SansSerif", style, 14);
+		}
+	}
 
     private BufferedImage getCardTemplateImage(Pokemon pokemon) {
         String name = pokemon.getElement().getElementName().toLowerCase() + "_card.png";
