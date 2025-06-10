@@ -42,45 +42,60 @@ public class ServiceForTelegramBotCommunication {
         this.bot = bot;
     }
 
-    public void sendMultiplePhotoMessage(long chatId, List<BufferedImage> contents) {
+    public void sendMultiplePhotoMessage(long chatId, List<BufferedImage> contents, int replyToMessageId) {
         if (contents.isEmpty()) return;
 
         if (contents.size() == 1) {
-            sendPhotoMessage(chatId, contents.get(0));
+            sendPhotoMessage(chatId, contents.get(0), replyToMessageId);
         } else if (contents.size() <= 10) {
-            sendMediaGroup(chatId, contents);
+            sendMediaGroup(chatId, contents, replyToMessageId);
         } else {
             LOGGER.error("Cannot send more than 10 images");
         }
     }
 
-    public void sendPhotoMessage(long chatId, BufferedImage content) {
+    public void sendPhotoMessage(long chatId, BufferedImage content, int replyToMessageId) {
         try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             ImageIO.write(content, "png", os);
             InputStream is = new ByteArrayInputStream(os.toByteArray());
-            SendPhoto sendPhoto = SendPhoto.builder().chatId(chatId).photo(new InputFile(is, "pokemon"))
-                    .caption("").parseMode("HTML").build();
+            SendPhoto sendPhoto = SendPhoto.builder()
+                .chatId(chatId)
+                .photo(new InputFile(is, "pokemon"))
+                .caption("")
+                .replyToMessageId(replyToMessageId)
+                .parseMode("HTML")
+                .build();
             sendMessage(sendPhoto);
         } catch (IOException e) {
             LOGGER.error("Error while preprocessing card image", e);
         }
     }
 
-    private void sendMediaGroup(long chatId, List<BufferedImage> contents) {
+    private void sendMediaGroup(long chatId, List<BufferedImage> contents, int replyToMessageId) {
         List<InputMedia> medias = contents.stream().map(image -> {
             try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
                 ImageIO.write(image, "png", os);
                 InputStream is = new ByteArrayInputStream(os.toByteArray());
                 String name = UUID.randomUUID().toString();
-                return InputMediaPhoto.builder().media("attach://" + name).mediaName(name).isNewMedia(true)
-                        .newMediaStream(is).caption("Your custom Pokemon card is ready!!!^^").parseMode("HTML").build();
+                return InputMediaPhoto.builder()
+                        .media("attach://" + name)
+                        .mediaName(name)
+                        .isNewMedia(true)
+                        .newMediaStream(is)
+                        .caption("Your custom Pokemon card is ready!!!^^")
+                        .parseMode("HTML")
+                        .build();
             } catch (IOException e) {
                 LOGGER.error("Error generating media group", e);
                 return null;
             }
         }).filter(Objects::nonNull).collect(Collectors.toList());
 
-        SendMediaGroup sendMediaGroup = SendMediaGroup.builder().chatId(chatId).medias(medias).build();
+        SendMediaGroup sendMediaGroup = SendMediaGroup.builder()
+                .chatId(chatId)
+                .medias(medias)
+                .replyToMessageId(replyToMessageId)
+                .build();
         sendMessage(sendMediaGroup);
     }
 
@@ -115,21 +130,25 @@ public class ServiceForTelegramBotCommunication {
         userElementMap.put(userId, selectedElement);
     }
 
-    public void generateCommandReceived(long chatId, long userId) {
+    public void generateCommandReceived(long chatId, long userId, int replyToMessageId) {
         PokemonElement element = userElementMap.get(userId);
         String concept = userConceptMap.get(userId);
 
         if (element == null || concept == null || concept.isBlank()) {
             SendMessage message = new SendMessage();
             message.setChatId(chatId);
+            message.setReplyToMessageId(replyToMessageId);
             message.setText("⚠️ Please provide both an element and a subject before generating!");
             sendMessage(message);
             return;
         }
 
-        PokemonParameters parameters = PokemonParameters.builder().element(element).pokemonConcept(concept).build();
+        PokemonParameters parameters = PokemonParameters.builder()
+                .element(element)
+                .pokemonConcept(concept)
+                .build();
         List<BufferedImage> images = cardProcessor.generateCards(parameters);
-        sendMultiplePhotoMessage(chatId, images);
+        sendMultiplePhotoMessage(chatId, images, replyToMessageId);
 
         userElementMap.remove(userId);
         userConceptMap.remove(userId);
@@ -157,10 +176,15 @@ public class ServiceForTelegramBotCommunication {
         sendMessage(message);
     }
 
-    public void combinedGenerateCommand(long chatId, long userId, String element, String subject) {
+    public void subjectCommandReceived(long chatId, long userId, String subject) {
+        userConceptMap.put(userId, subject);
+    }
+
+
+    public void combinedGenerateCommand(long chatId, long userId, String element, String subject, int replyToMessageId) {
         elementCommandReceived(chatId, userId, element);
         userConceptMap.put(userId, subject);
-        generateCommandReceived(chatId, userId);
+        generateCommandReceived(chatId, userId, replyToMessageId);
     }
 
     private void sendMessage(SendMessage message) {

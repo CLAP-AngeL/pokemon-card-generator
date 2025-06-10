@@ -65,6 +65,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 String messageText = update.getMessage().getText().trim();
                 long chatId = update.getMessage().getChatId();
                 long userId = update.getMessage().getFrom().getId();
+                int messageId = update.getMessage().getMessageId();
 
                 // Ignore all messages that are not commands
                 if (!messageText.startsWith("/")) return;
@@ -76,11 +77,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                     case "/help" -> serviceForTelegramBotCommunication.helpCommandReceived(chatId);
                     case "/create_pokemon" -> {
                         if (activeUsers.putIfAbsent(userId, true) != null) {
-                            sendTextMessage(chatId, "⏳ You already have a request being processed. Please wait.");
+                            sendTextMessage(chatId, messageId, "⏳ You already have a request being processed. Please wait.");
                             return;
                         }
 
-                        sendTextMessage(chatId, "✅ Your request has been received and is being processed...");
+                        sendTextMessage(chatId, messageId, "✅ Your request has been received and is being processed...");
 
                         executor.submit(() -> {
                             try {
@@ -91,7 +92,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                                 } else {
                                     String element = parts[0].trim();
                                     String subject = parts[1].trim();
-                                    serviceForTelegramBotCommunication.combinedGenerateCommand(chatId, userId, element, subject);
+
+                                    serviceForTelegramBotCommunication.elementCommandReceived(chatId, userId, element);
+                                    serviceForTelegramBotCommunication.subjectCommandReceived(chatId, userId, subject);
+                                    serviceForTelegramBotCommunication.generateCommandReceived(chatId, userId, messageId);
                                 }
                             } catch (Exception e) {
                                 LOGGER.error("Error in user task", e);
@@ -101,7 +105,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                         });
                     }
                     default -> {
-                        // Do nothing for any unknown command
+                        // Do nothing for unknown commands
                     }
                 }
             }
@@ -110,9 +114,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendTextMessage(long chatId, String text) {
+    private void sendTextMessage(long chatId, int replyToMessageId, String text) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
+        message.setReplyToMessageId(replyToMessageId);
         message.setText(text);
         try {
             execute(message);
